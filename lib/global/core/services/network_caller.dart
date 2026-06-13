@@ -1,0 +1,147 @@
+import 'dart:convert';
+import 'dart:ui';
+
+import 'package:http/http.dart' as http;
+
+import '../../../features/auth/data/models/auth_controller.dart';
+import 'logger_service.dart';
+
+part '../models/network_response.dart';
+
+class NetworkCaller {
+  final VoidCallback onUnauthorize;
+  final Map<String, String>? headers;
+  final String? decodedErrorMSGKey;
+  final Future<bool> Function()? onRefreshToken;
+
+  NetworkCaller({required this.onUnauthorize, this.headers, this.decodedErrorMSGKey, this.onRefreshToken});
+
+  Future<NetworkResponse> getRequest({required String url, bool skipUnauthorize = false}) async {
+    try {
+      Uri uri = Uri.parse(url);
+      http.Response response = await http.get(uri, headers: headers);
+      return _processResponse(response, uri: uri, method: 'GET', skipUnauthorize: skipUnauthorize);
+    } on Exception catch (e) {
+      return NetworkResponse(isSuccess: false, responseCode: -1, errorMessage: e.toString());
+    }
+  }
+
+  Future<NetworkResponse> postRequest({required String url, Map<String, dynamic>? body, bool skipUnauthorize = false}) async {
+    try {
+      Uri uri = Uri.parse(url);
+      http.Response response = await http.post(
+        uri,
+        headers: headers ?? {'content-type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return _processResponse(response, uri: uri, method: 'POST', body: body, skipUnauthorize: skipUnauthorize);
+    } on Exception catch (e) {
+      return NetworkResponse(isSuccess: false, responseCode: -1, errorMessage: e.toString());
+    }
+  }
+
+  Future<NetworkResponse> putRequest({required String url, Map<String, dynamic>? body, bool skipUnauthorize = false}) async {
+    try {
+      Uri uri = Uri.parse(url);
+      http.Response response = await http.put(
+        uri,
+        headers: headers ?? {'content-type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      return _processResponse(response, uri: uri, method: 'PUT', body: body, skipUnauthorize: skipUnauthorize);
+    } on Exception catch (e) {
+      return NetworkResponse(isSuccess: false, responseCode: -1, errorMessage: e.toString());
+    }
+  }
+
+  Future<NetworkResponse> deleteRequest({required String url, bool skipUnauthorize = false}) async {
+    try {
+      Uri uri = Uri.parse(url);
+      http.Response response = await http.delete(uri, headers: headers);
+      return _processResponse(response, uri: uri, method: 'DELETE', skipUnauthorize: skipUnauthorize);
+    } on Exception catch (e) {
+      return NetworkResponse(isSuccess: false, responseCode: -1, errorMessage: e.toString());
+    }
+  }
+
+  Future<NetworkResponse> _processResponse(
+    http.Response response, {
+    required Uri uri,
+    required String method,
+    Map<String, dynamic>? body,
+    bool skipUnauthorize = false,
+  }) async {
+    final int statusCode = response.statusCode;
+    final dynamic decodedBody = _tryDecode(response.body);
+    AppLogger.i('[$method] ${uri.path} → $statusCode');
+    AppLogger.i('Response: ${_truncate(decodedBody)}');
+
+    if (statusCode == 200 || statusCode == 201) {
+      return NetworkResponse(
+        isSuccess: true,
+        responseCode: statusCode,
+        responseData: decodedBody,
+      );
+    }
+
+    if (statusCode == 401 && !skipUnauthorize) {
+      if (onRefreshToken != null) {
+        final refreshed = await onRefreshToken!();
+        if (refreshed) {
+          final updatedHeaders = <String, String>{
+            ...?headers,
+            'Authorization': 'Bearer ${AuthController.accessToken ?? ''}',
+          };
+          http.Response retryResponse;
+          switch (method) {
+            case 'GET':
+              retryResponse = await http.get(uri, headers: updatedHeaders);
+              break;
+            case 'POST':
+              retryResponse = await http.post(uri, headers: updatedHeaders, body: jsonEncode(body));
+              break;
+            case 'PUT':
+              retryResponse = await http.put(uri, headers: updatedHeaders, body: jsonEncode(body));
+              break;
+            case 'DELETE':
+              retryResponse = await http.delete(uri, headers: updatedHeaders);
+              break;
+            default:
+              retryResponse = response;
+          }
+          final retryDecoded = _tryDecode(retryResponse.body);
+          AppLogger.i('Retry [$method] ${uri.path} → ${retryResponse.statusCode}');
+          if (retryResponse.statusCode == 200 || retryResponse.statusCode == 201) {
+            return NetworkResponse(
+              isSuccess: true,
+              responseCode: retryResponse.statusCode,
+              responseData: retryDecoded,
+            );
+          }
+        }
+      }
+      onUnauthorize();
+      return NetworkResponse(isSuccess: false, responseCode: statusCode, errorMessage: 'Unauthorized');
+    }
+
+    return NetworkResponse(
+      isSuccess: false,
+      responseCode: statusCode,
+      responseData: decodedBody,
+      errorMessage: decodedBody is Map ? decodedBody[decodedErrorMSGKey ?? 'msg'] : 'Request failed',
+    );
+  }
+
+  dynamic _tryDecode(String body) {
+    try {
+      return jsonDecode(body);
+    } catch (_) {
+      return body;
+    }
+  }
+
+  String _truncate(dynamic data, [int maxLen = 500]) {
+    final s = data.toString();
+    return s.length > maxLen ? '${s.substring(0, maxLen)}...' : s;
+  }
+}

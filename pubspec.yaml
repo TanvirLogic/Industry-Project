@@ -1,0 +1,46 @@
+name: edtech
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.5+1
+  http: ^1.2.1
+  shared_preferences: ^2.2.3
+  google_fonts: ^8.1.0
+  logger: ^2.7.0
+  flutter_svg: ^2.0.10
+  google_sign_in: ^6.2.1
+  media_kit: ^1.1.10
+  media_kit_video: ^1.2.5
+  media_kit_native_event_loop: ^1.0.9
+  media_kit_libs_android_video: ^1.3.5
+  flutter_secure_storage: ^10.1.0
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.1
+  cached_network_image: ^3.4.1
+  image_cropper: ^8.0.2
+  dotted_border: ^2.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/app/
+    - assets/images/icons/nav/
+    - assets/images/icons/hub/
+    - assets/images/icons/course/
+    - assets/images/course_icons/
+    - assets/images/icons/action/
+    - assets/images/profile_icons/
+    - assets/images/social_icons/
+    - assets/images/revenue_icons/
