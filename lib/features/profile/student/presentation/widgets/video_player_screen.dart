@@ -80,9 +80,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  void _toggleAutoPlayNext() {
-    setState(() => _autoPlayNext = !_autoPlayNext);
-  }
+  // void _toggleAutoPlayNext() {
+  //   setState(() => _autoPlayNext = !_autoPlayNext);
+  // }
 
   void _enterFullScreen() {
     SystemChrome.setPreferredOrientations([
@@ -226,17 +226,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextButton.icon(
-                      onPressed: _onBack,
+                    onPressed: _onBack,
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    label: const Text('Go Back',
-                        style: TextStyle(color: Colors.white)),
+                    label: const Text(
+                      'Go Back',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   TextButton.icon(
                     onPressed: provider.retry,
                     icon: const Icon(Icons.refresh, color: Colors.white),
-                    label: const Text('Retry',
-                        style: TextStyle(color: Colors.white)),
+                    label: const Text(
+                      'Retry',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ],
               ),
@@ -288,11 +292,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
           if (_showControls) ...[
             Positioned(
-              top: 0, left: 0, right: 0,
+              top: 0,
+              left: 0,
+              right: 0,
               child: Container(
                 padding: EdgeInsets.only(
                   top: MediaQuery.of(context).padding.top + 8,
-                  left: 8, right: 16, bottom: 16,
+                  left: 8,
+                  right: 16,
+                  bottom: 16,
                 ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -304,31 +312,34 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     ],
                   ),
                 ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: _onBack,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            widget.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.settings_rounded, color: Colors.white),
-                          onPressed: _showVideoSettings,
-                        ),
-                      ],
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: _onBack,
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.settings_rounded,
+                        color: Colors.white,
+                      ),
+                      onPressed: _showVideoSettings,
+                    ),
+                  ],
+                ),
               ),
             ),
 
@@ -354,17 +365,23 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     ),
                   ),
                   const SizedBox(width: 24),
-                  _SkipButton(icon: Icons.forward_10, onTap: provider.skipForward),
+                  _SkipButton(
+                    icon: Icons.forward_10,
+                    onTap: provider.skipForward,
+                  ),
                 ],
               ),
             ),
 
             if (provider.isInitialized)
               Positioned(
-                bottom: 0, left: 0, right: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
                 child: Container(
                   padding: EdgeInsets.only(
-                    left: 16, right: 16,
+                    left: 16,
+                    right: 16,
                     bottom: MediaQuery.of(context).padding.bottom + 12,
                     top: 24,
                   ),
@@ -395,13 +412,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         child: Slider(
                           value: provider.position.inMilliseconds
                               .toDouble()
-                              .clamp(0, provider.duration.inMilliseconds.toDouble()),
+                              .clamp(
+                                0,
+                                provider.duration.inMilliseconds.toDouble(),
+                              ),
                           min: 0,
                           max: provider.duration.inMilliseconds
                               .toDouble()
                               .clamp(1, double.infinity),
                           onChanged: (value) {
-                            provider.seek(Duration(milliseconds: value.toInt()));
+                            provider.seek(
+                              Duration(milliseconds: value.toInt()),
+                            );
                           },
                         ),
                       ),
@@ -423,12 +445,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 rate: provider.rate,
                                 onChanged: provider.setRate,
                               ),
-                              const SizedBox(width: 16),
-                              if (widget.nextVideoUrl != null)
-                                _AutoNextToggle(
-                                  enabled: _autoPlayNext,
-                                  onToggle: _toggleAutoPlayNext,
-                                ),
+                              // const SizedBox(width: 16),
+                              // if (widget.nextVideoUrl != null)
+                              //   _AutoNextToggle(
+                              //     enabled: _autoPlayNext,
+                              //     onToggle: _toggleAutoPlayNext,
+                              //   ),
                             ],
                           ),
                           Text(
@@ -511,37 +533,37 @@ class _SpeedButtonState extends State<_SpeedButton> {
   }
 }
 
-class _AutoNextToggle extends StatelessWidget {
-  final bool enabled;
-  final VoidCallback onToggle;
+// class _AutoNextToggle extends StatelessWidget {
+//   final bool enabled;
+//   final VoidCallback onToggle;
 
-  const _AutoNextToggle({required this.enabled, required this.onToggle});
+//   const _AutoNextToggle({required this.enabled, required this.onToggle});
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onToggle,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Auto',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            enabled ? Icons.playlist_play : Icons.playlist_add,
-            color: enabled ? Colors.white : Colors.white54,
-            size: 18,
-          ),
-        ],
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return GestureDetector(
+//       onTap: onToggle,
+//       child: Row(
+//         mainAxisSize: MainAxisSize.min,
+//         children: [
+//           Text(
+//             'Auto',
+//             style: TextStyle(
+//               color: Colors.white.withValues(alpha: 0.7),
+//               fontSize: 11,
+//             ),
+//           ),
+//           const SizedBox(width: 4),
+//           Icon(
+//             enabled ? Icons.playlist_play : Icons.playlist_add,
+//             color: enabled ? Colors.white : Colors.white54,
+//             size: 18,
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
 
 class _VideoSettingsSheet extends StatefulWidget {
   final bool isOrientationLocked;
@@ -593,18 +615,23 @@ class _VideoSettingsSheetState extends State<_VideoSettingsSheet> {
                 isExpanded: _expandedSection == 'speed',
                 onTap: () {
                   setState(() {
-                    _expandedSection =
-                        _expandedSection == 'speed' ? null : 'speed';
+                    _expandedSection = _expandedSection == 'speed'
+                        ? null
+                        : 'speed';
                   });
                 },
-                children: _speeds.map((s) => _SettingsTile(
-                  label: '${s}x',
-                  isSelected: provider.rate == s,
-                  onTap: () {
-                    provider.setRate(s);
-                    Navigator.pop(context);
-                  },
-                )).toList(),
+                children: _speeds
+                    .map(
+                      (s) => _SettingsTile(
+                        label: '${s}x',
+                        isSelected: provider.rate == s,
+                        onTap: () {
+                          provider.setRate(s);
+                          Navigator.pop(context);
+                        },
+                      ),
+                    )
+                    .toList(),
               ),
               const SizedBox(height: 4),
               _SettingsCategory(
@@ -672,10 +699,7 @@ class _SettingsCategory extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
                   ),
                 ),
                 if (subtitle != null)
@@ -705,10 +729,7 @@ class _SettingsCategory extends StatelessWidget {
         if (isExpanded && children != null)
           Padding(
             padding: const EdgeInsets.only(left: 32, bottom: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: children!,
-            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: children!),
           ),
       ],
     );
@@ -732,9 +753,7 @@ class _SettingsTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: Row(
           children: [
             Expanded(
