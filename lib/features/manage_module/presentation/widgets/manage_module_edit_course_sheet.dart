@@ -246,7 +246,7 @@ class _ManageModuleEditCourseSheetState
                     onFieldSubmitted: (_) =>
                         FocusManager.instance.primaryFocus?.unfocus(),
                     style: TextStyle(color: cs.onSurface),
-                    decoration: _inputDeco(cs, 'Enter your description'),
+                    decoration: _inputDeco(cs, 'Enter your description', borderRadius: 16),
                   ),
                   const SizedBox(height: 16),
                   _buildLabel('Requirements', cs),
@@ -258,7 +258,7 @@ class _ManageModuleEditCourseSheetState
                     onFieldSubmitted: (_) =>
                         FocusManager.instance.primaryFocus?.unfocus(),
                     style: TextStyle(color: cs.onSurface),
-                    decoration: _inputDeco(cs, 'Enter your requirements'),
+                    decoration: _inputDeco(cs, 'Enter your requirements', borderRadius: 16),
                   ),
                   const SizedBox(height: 16),
                   _buildLabel('Language', cs),
@@ -440,7 +440,7 @@ class _ManageModuleEditCourseSheetState
     );
   }
 
-  InputDecoration _inputDeco(ColorScheme cs, String hint) {
+  InputDecoration _inputDeco(ColorScheme cs, String hint, {double borderRadius = AppSizes.radiusDef}) {
     final isDark = cs.brightness == Brightness.dark;
     return InputDecoration(
       hintText: hint,
@@ -449,20 +449,20 @@ class _ManageModuleEditCourseSheetState
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusDef),
+        borderRadius: BorderRadius.circular(borderRadius),
         borderSide: BorderSide(
             color: isDark ? cs.outlineVariant : AppColors.border, width: 1),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusDef),
+        borderRadius: BorderRadius.circular(borderRadius),
         borderSide: BorderSide(color: AppColors.themeColor, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusDef),
+        borderRadius: BorderRadius.circular(borderRadius),
         borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusDef),
+        borderRadius: BorderRadius.circular(borderRadius),
         borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
       ),
     );
