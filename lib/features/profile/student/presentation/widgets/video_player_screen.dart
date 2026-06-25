@@ -103,7 +103,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void dispose() {
     _controlHideTimer?.cancel();
-    context.read<VideoPlayerProvider>().stop();
+    context.read<VideoPlayerProvider>().pause();
     _exitFullScreen();
     super.dispose();
   }
@@ -161,8 +161,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, _) {
-        context.read<VideoPlayerProvider>().stop();
-        if (didPop) _exitFullScreen();
+        context.read<VideoPlayerProvider>().pause();
       },
       child: Consumer<VideoPlayerProvider>(
         builder: (context, provider, _) {

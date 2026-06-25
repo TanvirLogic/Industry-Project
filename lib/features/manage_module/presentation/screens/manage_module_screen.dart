@@ -14,6 +14,7 @@ import 'package:edtech/features/manage_module/presentation/widgets/manage_module
 import 'package:edtech/features/manage_module/presentation/widgets/manage_module_add_module_sheet.dart';
 import 'package:edtech/features/manage_module/presentation/widgets/manage_module_edit_module_sheet.dart';
 import 'package:edtech/features/manage_module/presentation/widgets/manage_module_edit_lesson_sheet.dart';
+import 'package:edtech/features/manage_module/presentation/widgets/manage_module_shimmer.dart';
 import 'package:edtech/global/core/widgets/app_alert_dialog.dart';
 import 'package:edtech/global/core/providers/video_player_provider.dart';
 import 'package:edtech/features/profile/student/presentation/widgets/video_player_screen.dart';
@@ -87,7 +88,9 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
               Positioned.fill(
                 child: RefreshIndicator(
                   onRefresh: provider.refresh,
-                  child: SingleChildScrollView(
+                  child: provider.isLoading
+                      ? const ManageModuleShimmer()
+                      : SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 100),
                   physics: const BouncingScrollPhysics(),
                   child: Column(
