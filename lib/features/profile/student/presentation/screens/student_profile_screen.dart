@@ -140,8 +140,10 @@ class _ProfileBody extends StatelessWidget {
               onAvatarTap: () => showAvatarOptions(context, profile, heroTag: 'student_avatar'),
             ),
             const SizedBox(height: 12),
-            const SectionHeader(title: 'Skill Badges'),
-            const SkillBadgesRow(),
+            if (profile.skills.isNotEmpty) ...[
+              const SectionHeader(title: 'Skill Badges'),
+              SkillBadgesRow(skills: profile.skills),
+            ],
             if (profile.socialLinks.isNotEmpty) ...[
               const SizedBox(height: 12),
               const SectionHeader(title: 'Social Links'),

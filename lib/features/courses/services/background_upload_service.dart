@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:edtech/app/urls.dart';
 import 'package:edtech/features/auth/data/models/auth_controller.dart';
 import 'package:edtech/global/core/services/logger_service.dart';
 import 'package:edtech/global/core/services/native_upload_bridge.dart';
@@ -147,6 +148,108 @@ class BackgroundUploadService {
       case 'webp': return 'image/webp';
       case 'avif': return 'image/avif';
       default: return 'image/jpeg';
+    }
+  }
+
+  /// Fetch presigned URLs for course asset upload (thumbnail + optional video).
+  ///
+  /// The endpoint returns a nested response:
+  /// ```json
+  /// { "data": { "data": {
+  ///     "thumbnail": { "uploadUrl": "...", "fileUrl": "..." },
+  ///     "video": { "uploadUrl": "...", "fileUrl": "..." }
+  /// }}}
+  /// ```
+  ///
+  /// Returns a map with keys: `thumbnailUploadUrl`, `thumbnailFileUrl`,
+  /// `videoUploadUrl` (nullable), `videoFileUrl` (nullable).
+  static Future<Map<String, String?>?> fetchCoursePresignedUrls({
+    required String thumbnailPath,
+    String? videoPath,
+  }) async {
+    final token = AuthController.accessToken;
+    if (token == null) {
+      AppLogger.e('fetchCoursePresignedUrls: no auth token');
+      return null;
+    }
+    _authToken = token;
+
+    final thumbName = thumbnailPath.split(Platform.pathSeparator).last;
+    final payload = <String, dynamic>{
+      'thumbnailFilename': thumbName,
+      'thumbnailContentType': inferImageContentType(thumbName),
+    };
+
+    if (videoPath != null) {
+      final videoName = videoPath.split(Platform.pathSeparator).last;
+      payload['videoFilename'] = videoName;
+      payload['videoContentType'] = inferVideoContentType(videoName);
+    }
+
+    for (int retry = 0; retry < maxRetries; retry++) {
+      try {
+        final response = await http.post(
+          Uri.parse(Urls.courseAssetsUploadUrl),
+          headers: _authHeaders(),
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 30));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          final outerData = decoded['data'] as Map<String, dynamic>?;
+          final innerData = outerData?['data'] as Map<String, dynamic>?;
+
+          if (innerData == null) {
+            AppLogger.e('fetchCoursePresignedUrls: nested data is null');
+            return null;
+          }
+
+          final thumb = innerData['thumbnail'] as Map<String, dynamic>?;
+          final video = innerData['video'] as Map<String, dynamic>?;
+
+          final thumbUploadUrl = thumb?['uploadUrl'] as String?;
+          final thumbFileUrl = thumb?['fileUrl'] as String?;
+
+          if (thumbUploadUrl == null || thumbFileUrl == null) {
+            AppLogger.e('fetchCoursePresignedUrls: thumbnail URLs missing');
+            return null;
+          }
+
+          return {
+            'thumbnailUploadUrl': thumbUploadUrl,
+            'thumbnailFileUrl': thumbFileUrl,
+            'videoUploadUrl': video?['uploadUrl'] as String?,
+            'videoFileUrl': video?['fileUrl'] as String?,
+          };
+        }
+      } on SocketException {
+        await Future.delayed(Duration(seconds: 2 * (retry + 1)));
+      } on http.ClientException {
+        await Future.delayed(Duration(seconds: 2 * (retry + 1)));
+      }
+    }
+    AppLogger.e('fetchCoursePresignedUrls: failed after $maxRetries retries');
+    return null;
+  }
+
+  /// Upload a file to S3 via presigned URL using HTTP PUT.
+  static Future<bool> uploadFileToS3({
+    required String filePath,
+    required String uploadUrl,
+    required String contentType,
+  }) async {
+    try {
+      final file = File(filePath);
+      final bytes = await file.readAsBytes();
+      final response = await http.put(
+        Uri.parse(uploadUrl),
+        headers: {'Content-Type': contentType},
+        body: bytes,
+      ).timeout(const Duration(minutes: 10));
+      return response.statusCode == 200;
+    } catch (e) {
+      AppLogger.e('uploadFileToS3 error: $e');
+      return false;
     }
   }
 }

@@ -231,8 +231,10 @@ class _MentorProfileBody extends StatelessWidget {
                       ),
                     const SizedBox(height: 12),
                     // ── Section 4: Skill Badges (left-aligned under start) ──
-                    const SectionHeader(title: 'Skill Badges'),
-                    const SkillBadgesRow(),
+                    if (profile.skills.isNotEmpty) ...[
+                      const SectionHeader(title: 'Skill Badges'),
+                      SkillBadgesRow(skills: profile.skills),
+                    ],
                     if (profile.socialLinks.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       const SectionHeader(title: 'Social Links'),
@@ -246,23 +248,25 @@ class _MentorProfileBody extends StatelessWidget {
                     ],
                     // const SizedBox(height: 12), // 12px between sections
                     // ── Section 7: Completed Courses ──
-                    const SectionHeader(title: 'Featured Courses'),
-                    CompletedCoursesVerticalListView(
-                      courses: profile.courses,
-                      isMentorProfile: true,
-                      isOwnProfile: isOwnProfile,
-                      onActionPressed: (course) {
-                        if (isOwnProfile) {
-                          Navigator.pushNamed(
-                            context,
-                            AppRoutes.manageModule,
-                            arguments: {'courseId': course.id},
-                          );
-                        } else {
-                          Navigator.pushNamed(context, AppRoutes.courseDetails);
-                        }
-                      },
-                    ),
+                    if (profile.courses.isNotEmpty) ...[
+                      const SectionHeader(title: 'Featured Courses'),
+                      CompletedCoursesVerticalListView(
+                        courses: profile.courses,
+                        isMentorProfile: true,
+                        isOwnProfile: isOwnProfile,
+                        onActionPressed: (course) {
+                          if (isOwnProfile) {
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.manageModule,
+                              arguments: {'courseId': course.id},
+                            );
+                          } else {
+                            Navigator.pushNamed(context, AppRoutes.courseDetails);
+                          }
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 24), // bottom padding
                   ],
                 ),

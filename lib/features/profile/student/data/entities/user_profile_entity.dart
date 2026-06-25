@@ -60,6 +60,7 @@ class UserProfileEntity {
   final List<String> socialPlatforms;
   final List<ProfileVideo> videos;
   final List<ProfileCourse> courses;
+  final List<String> skills;
 
   const UserProfileEntity({
     required this.id,
@@ -79,6 +80,7 @@ class UserProfileEntity {
     required this.socialPlatforms,
     required this.videos,
     required this.courses,
+    this.skills = const [],
   });
 
   /// Returns a copy of this entity with the given fields replaced.
@@ -100,6 +102,7 @@ class UserProfileEntity {
     List<String>? socialPlatforms,
     List<ProfileVideo>? videos,
     List<ProfileCourse>? courses,
+    List<String>? skills,
   }) {
     return UserProfileEntity(
       id: id ?? this.id,
@@ -119,6 +122,7 @@ class UserProfileEntity {
       socialPlatforms: socialPlatforms ?? this.socialPlatforms,
       videos: videos ?? this.videos,
       courses: courses ?? this.courses,
+      skills: skills ?? this.skills,
     );
   }
 

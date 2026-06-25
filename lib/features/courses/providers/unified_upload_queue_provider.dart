@@ -119,6 +119,8 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
   }
 
   /// Course upload: queue → fetch presigned URLs → sync native → start.
+  /// Both thumbnail and video are uploaded by the native :upload process
+  /// sequentially, keeping the UI non-blocking.
   Future<int> addCourseToQueue({
     required String thumbnailPath,
     required String? videoPath,
@@ -174,40 +176,58 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       return id;
     }
 
-    // Fetch presigned URL for thumbnail
-    final urls = await BackgroundUploadService.fetchPresignedUrl(
-      filePath: thumbnailPath,
-      endpoint: Urls.courseAssetsUploadUrl,
-      buildPayload: (name) => {
-        'thumbnailFilename': name,
-        'thumbnailContentType': BackgroundUploadService.inferImageContentType(name),
-      },
+    // Fetch presigned URLs for both thumbnail and video in one request
+    final urls = await BackgroundUploadService.fetchCoursePresignedUrls(
+      thumbnailPath: thumbnailPath,
+      videoPath: videoPath,
     );
 
     if (urls == null) {
       await _cleanupFailedUpload(id, thumbnailPath);
-      ToastService.showError('Failed to get upload URL');
+      ToastService.showError('Failed to get upload URLs');
       return 0;
     }
 
+    final thumbnailUploadUrl = urls['thumbnailUploadUrl']!;
+    final thumbnailFileUrl = urls['thumbnailFileUrl']!;
+    final videoUploadUrl = urls['videoUploadUrl'];
+    final videoFileUrl = urls['videoFileUrl'];
+
     final authToken = AuthController.accessToken;
+
+    // Queue video to native for background upload (no callback — just upload to S3)
+    if (videoPath != null && videoUploadUrl != null) {
+      await NativeUploadBridge.startNativeUpload(
+        filePath: videoPath,
+        uploadUrl: videoUploadUrl,
+        fileUrl: videoFileUrl,
+        title: 'Course intro video: $title',
+        contentType: BackgroundUploadService.inferVideoContentType(videoPath),
+        uploadType: 'course_video',
+        authToken: authToken,
+        metadata: metadataJson,
+      );
+    }
+
+    // Build callback body with S3 URLs (video URL known from presigned response)
     final callbackBody = jsonEncode({
       'title': meta.courseTitle,
       'description': meta.description,
       'shortDescription': meta.shortDescription,
       'requirements': meta.requirements,
-      'thumbnailUrl': urls['fileUrl'],
-      if (videoPath != null) 'introVideoUrl': videoPath,
+      'thumbnailUrl': thumbnailFileUrl,
+      if (videoFileUrl != null) 'introVideoUrl': videoFileUrl,
       'language': meta.language,
       'level': meta.level.toUpperCase(),
       'type': meta.type.toUpperCase(),
       'price': meta.price,
     });
 
+    // Queue thumbnail to native (with callback that creates the course)
     final syncOk = await NativeUploadBridge.startNativeUpload(
       filePath: thumbnailPath,
-      uploadUrl: urls['uploadUrl']!,
-      fileUrl: urls['fileUrl'],
+      uploadUrl: thumbnailUploadUrl,
+      fileUrl: thumbnailFileUrl,
       title: 'Course thumbnail: $title',
       contentType: BackgroundUploadService.inferImageContentType(thumbnailPath),
       uploadType: 'course',
@@ -223,7 +243,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       return 0;
     }
 
-    await UploadQueueRepository.updateUrls(id: id, uploadUrl: urls['uploadUrl']!, fileUrl: urls['fileUrl']!);
+    await UploadQueueRepository.updateUrls(id: id, uploadUrl: thumbnailUploadUrl, fileUrl: thumbnailFileUrl);
 
     final started = await NativeUploadBridge.startQueueProcessing();
     if (!started) {

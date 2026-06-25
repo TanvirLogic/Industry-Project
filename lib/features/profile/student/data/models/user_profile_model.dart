@@ -19,6 +19,7 @@ class UserProfileModel extends UserProfileEntity {
     required super.socialPlatforms,
     required super.videos,
     required super.courses,
+    super.skills,
   });
 
   factory UserProfileModel.fromJson(Map<String, dynamic> json) {
@@ -67,6 +68,13 @@ class UserProfileModel extends UserProfileEntity {
             .toList() ??
         <SocialLink>[];
 
+    // ── Parse skills ──
+    final skillsList =
+        (profile['skills'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        <String>[];
+
     // ── Parse DOB ──
     DateTime? parsedDob;
     if (profile['dob'] != null && profile['dob'].toString().isNotEmpty) {
@@ -100,6 +108,7 @@ class UserProfileModel extends UserProfileEntity {
       socialPlatforms: platforms,
       videos: videosList,
       courses: coursesList,
+      skills: skillsList,
     );
   }
 }
