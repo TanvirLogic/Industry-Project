@@ -84,15 +84,16 @@ class MentorProfileProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final body = <String, dynamic>{};
-    if (name != null) body['name'] = name;
-    if (username != null) body['username'] = username;
-    if (profession != null) body['profession'] = profession;
-    if (dob != null && dob.isNotEmpty) body['dob'] = dob;
-    if (bio != null) body['bio'] = bio;
-    if (country != null) body['country'] = country;
-    if (phone != null) body['phone'] = phone;
-    if (gender != null) body['gender'] = gender;
+    final body = <String, dynamic>{
+      'name': name ?? '',
+      'username': username ?? '',
+      'dob': dob ?? '',
+      'gender': gender ?? 0,
+    };
+    if (profession != null && profession.isNotEmpty) body['profession'] = profession;
+    if (bio != null && bio.isNotEmpty) body['bio'] = bio;
+    if (country != null && country.isNotEmpty) body['country'] = country;
+    if (phone != null && phone.isNotEmpty) body['phone'] = phone;
     if (socialLinks != null) {
       body['socialLinks'] = socialLinks
           .map((s) => {'platform': s.platform, 'url': s.url})
