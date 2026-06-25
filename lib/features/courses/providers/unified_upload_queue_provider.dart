@@ -297,8 +297,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     final callbackBody = jsonEncode({
       'title': meta.lessonTitle,
       'videoUrl': urls['fileUrl'],
-      'moduleID': meta.moduleId,
-      'courseID': meta.courseId,
+      'moduleId': meta.moduleId,
       'duration': duration,
       'fileSize': fileSize,
     });
@@ -671,8 +670,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
           return {
             'title': meta?.lessonTitle ?? item.title,
             'videoUrl': fileUrl,
-            'moduleID': meta?.moduleId,
-            'courseID': meta?.courseId,
+            'moduleId': meta?.moduleId,
             'duration': item.videoDuration,
             'fileSize': item.fileSize,
           };

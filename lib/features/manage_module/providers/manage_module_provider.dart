@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:edtech/features/courses/data/models/upload_task.dart';
+import 'package:edtech/features/courses/data/repositories/upload_queue_repository.dart';
 import 'package:edtech/features/courses/providers/unified_upload_queue_provider.dart';
 import 'package:edtech/features/manage_module/data/manage_module_models.dart';
 import 'package:flutter/material.dart';
@@ -140,6 +142,90 @@ class ManageModuleProvider extends ChangeNotifier {
     }
     _isLoading = false;
     notifyListeners();
+    _restorePendingUploads();
+  }
+
+  Future<void> _restorePendingUploads() async {
+    try {
+      final allItems = await UploadQueueRepository.getActive();
+      final lessonItems = allItems.where((i) => i.uploadType == 'module_lesson').toList();
+      if (lessonItems.isEmpty) return;
+
+      final nativeData = await NativeUploadBridge.getQueueItems();
+      final nativeItems =
+          (nativeData['items'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ??
+              [];
+
+      bool hasUpdates = false;
+
+      for (final item in lessonItems) {
+        final meta = item.parseMetadata(ModuleLessonMetadata.fromJson);
+        if (meta == null) {
+          AppLogger.w('_restorePendingUploads: could not parse metadata for item ${item.id}');
+          continue;
+        }
+        if (meta.courseId != courseId) continue;
+
+        final moduleIndex = _modules.indexWhere((m) => m.id == meta.moduleId);
+        if (moduleIndex < 0) {
+          AppLogger.w('_restorePendingUploads: module ${meta.moduleId} not found for item ${item.id}');
+          continue;
+        }
+
+        final module = _modules[moduleIndex];
+        final alreadyExists = module.lessons.any(
+          (l) => l.title == meta.lessonTitle,
+        );
+        if (alreadyExists) continue;
+
+        // Match native item by ID first, then by filePath as fallback
+        // (after recovery, IDs may have been regenerated differently)
+        Map<String, dynamic>? nativeItem;
+        for (final n in nativeItems) {
+          if (n['id'] == item.id) {
+            nativeItem = n;
+            break;
+          }
+        }
+        if (nativeItem == null) {
+          for (final n in nativeItems) {
+            if (n['filePath'] == item.filePath) {
+              nativeItem = n;
+              break;
+            }
+          }
+        }
+
+        final progress =
+            ((nativeItem?['progress'] as num?)?.toDouble() ?? 0.0) / 100.0;
+        final status = nativeItem?['status'] as String? ?? item.status;
+        final fileUrl = nativeItem?['fileUrl'] as String? ?? item.fileUrl;
+
+        AppLogger.i('_restorePendingUploads: restoring lesson "${meta.lessonTitle}" — status=$status, progress=$progress');
+
+        final lessonId = _nextLessonId++;
+        final lesson = Lesson(
+          id: lessonId,
+          title: meta.lessonTitle,
+          duration: '0:00',
+          type: LessonType.video,
+          uploadProgress: progress,
+          uploadStatus: status,
+          videoUrl: fileUrl,
+        );
+
+        module.lessons.add(lesson);
+        _queueItemToLesson[item.id!] = lessonId;
+        hasUpdates = true;
+      }
+
+      if (hasUpdates) {
+        _startProgressPolling();
+        notifyListeners();
+      }
+    } catch (e) {
+      AppLogger.e('_restorePendingUploads error: $e');
+    }
   }
 
   List<Map<String, dynamic>> getSerializedOrder() {
@@ -399,41 +485,66 @@ class ManageModuleProvider extends ChangeNotifier {
 
   void _startProgressPolling() {
     _progressTimer?.cancel();
+    int emptyNativeReads = 0;
+
     _progressTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
       try {
         final data = await NativeUploadBridge.getQueueItems();
         final items = data['items'] as List<dynamic>? ?? [];
         bool updated = false;
 
-        for (final raw in items) {
-          final item = raw as Map<String, dynamic>;
-          final queueId = item['id'] as int;
-          final lessonId = _queueItemToLesson[queueId];
-          if (lessonId == null) continue;
-
-          final lesson = _findLessonById(lessonId);
-          if (lesson == null) {
-            _queueItemToLesson.remove(queueId);
-            continue;
-          }
-
-          final status = item['status'] as String? ?? 'pending';
-          final progress = ((item['progress'] as num?)?.toDouble() ?? 0.0) / 100.0;
-
-          if (lesson.uploadStatus != status || lesson.uploadProgress != progress) {
-            lesson.uploadStatus = status;
-            lesson.uploadProgress = progress;
-            updated = true;
-          }
-
-          if (status == 'completed') {
-            final fileUrl = item['fileUrl'] as String?;
-            if (fileUrl != null && fileUrl.isNotEmpty) {
-              lesson.videoUrl ??= fileUrl;
+        // If native state is empty but we still have queued lessons,
+        // the native service completed and deleted the state file.
+        // Mark all queued lessons as completed.
+        if (items.isEmpty && _queueItemToLesson.isNotEmpty) {
+          emptyNativeReads++;
+          // Wait 2 cycles (4 seconds) to confirm native is truly gone
+          // before marking as completed (avoids false positive on slow reads)
+          if (emptyNativeReads >= 2) {
+            for (final entry in _queueItemToLesson.entries) {
+              final lesson = _findLessonById(entry.value);
+              if (lesson != null && lesson.uploadStatus != 'completed') {
+                lesson.uploadStatus = 'completed';
+                updated = true;
+              }
             }
-            _queueItemToLesson.remove(queueId);
-          } else if (status == 'failed') {
-            _queueItemToLesson.remove(queueId);
+            _queueItemToLesson.clear();
+          }
+        } else if (items.isNotEmpty) {
+          emptyNativeReads = 0;
+
+          for (final raw in items) {
+            final item = raw as Map<String, dynamic>;
+            final queueId = item['id'] as int;
+            final lessonId = _queueItemToLesson[queueId];
+            if (lessonId == null) continue;
+
+            final lesson = _findLessonById(lessonId);
+            if (lesson == null) {
+              _queueItemToLesson.remove(queueId);
+              continue;
+            }
+
+            final status = item['status'] as String? ?? 'pending';
+            final progress =
+                ((item['progress'] as num?)?.toDouble() ?? 0.0) / 100.0;
+
+            if (lesson.uploadStatus != status ||
+                lesson.uploadProgress != progress) {
+              lesson.uploadStatus = status;
+              lesson.uploadProgress = progress;
+              updated = true;
+            }
+
+            if (status == 'completed') {
+              final fileUrl = item['fileUrl'] as String?;
+              if (fileUrl != null && fileUrl.isNotEmpty) {
+                lesson.videoUrl ??= fileUrl;
+              }
+              _queueItemToLesson.remove(queueId);
+            } else if (status == 'failed') {
+              _queueItemToLesson.remove(queueId);
+            }
           }
         }
 
@@ -443,7 +554,9 @@ class ManageModuleProvider extends ChangeNotifier {
           _progressTimer?.cancel();
           _progressTimer = null;
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.e('_startProgressPolling error: $e');
+      }
     });
   }
 
@@ -487,14 +600,6 @@ class ManageModuleProvider extends ChangeNotifier {
         return false;
       }
 
-      await NativeUploadBridge.startNativeUpload(
-        filePath: resourceFile.path,
-        uploadUrl: uploadUrl,
-        title: title,
-        contentType: contentType,
-        uploadType: 'resource',
-      );
-
       ToastService.showInfo('Uploading resource...');
       final bytes = await resourceFile.readAsBytes();
       final response = await http.put(
@@ -535,7 +640,6 @@ class ManageModuleProvider extends ChangeNotifier {
           type: LessonType.resource,
         ),
       );
-      await NativeUploadBridge.clearState();
       notifyListeners();
       ToastService.showSuccess('Resource lesson added!');
       return true;
