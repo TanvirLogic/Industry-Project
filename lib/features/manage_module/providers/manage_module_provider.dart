@@ -89,6 +89,9 @@ class ManageModuleProvider extends ChangeNotifier {
     } finally {
       _isRefreshing = false;
     }
+    // Restore any pending items that are still in the DB after a silent
+    // refresh so they don't disappear from the UI.
+    await _restorePendingUploads();
   }
 
   Future<void> _fetchCourse({bool silent = false}) async {
@@ -690,7 +693,9 @@ class ManageModuleProvider extends ChangeNotifier {
         final dbItem = dbMap[queueId];
 
         if (dbItem == null) {
-          completedIds.add(queueId);
+          AppLogger.w('_pollProgress: queueId=$queueId vanished from DB — removing from pending');
+          _pendingLessons.remove(queueId);
+          updated = true;
           continue;
         }
 

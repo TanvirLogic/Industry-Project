@@ -25,10 +25,6 @@ Future<void> initPlatformServices() async {
 
   // Storage cleanup: delete old rows, orphaned cache files, trim WAL
   await UploadQueueRepository.runStartupCleanup();
-
-  // Reset items stuck in 'uploading' from a previous session
-  // so they become 'pending' and can be re-uploaded
-  await _resetStaleLocks();
 }
 
 Future<void> _requestNotificationPermissionEarly() async {
@@ -37,15 +33,4 @@ Future<void> _requestNotificationPermissionEarly() async {
       await UploadNotificationService.requestNotificationPermission();
     }
   } catch (_) {}
-}
-
-Future<void> _resetStaleLocks() async {
-  try {
-    await UploadQueueRepository.resetStaleUploading(
-      heartbeatTimeout: const Duration(minutes: 2),
-      fallbackTimeout: const Duration(minutes: 5),
-    );
-  } catch (e) {
-    AppLogger.e('Recovery: error resetting stale locks - $e');
-  }
 }

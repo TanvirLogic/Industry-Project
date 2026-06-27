@@ -43,14 +43,20 @@ class BackgroundUploadService {
           ...buildPayload(fileName),
           ...extraFields,
         };
+        AppLogger.i('fetchPresignedUrl [attempt ${retry + 1}/$maxRetries]: POST $endpoint');
+        AppLogger.i('fetchPresignedUrl: payload=${jsonEncode(payload)}');
         final response = await http.post(
           Uri.parse(endpoint),
           headers: _authHeaders(),
           body: jsonEncode(payload),
         ).timeout(const Duration(seconds: 30));
 
+        AppLogger.i('fetchPresignedUrl: response status=${response.statusCode} body=${response.body}');
+
         if (response.statusCode == 200 || response.statusCode == 201) {
           final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+
+          // Try: {data: {uploadUrl, fileUrl}}
           final data = decoded['data'] as Map<String, dynamic>?;
           if (data != null) {
             final uploadUrl = data['uploadUrl'] as String?;
@@ -65,9 +71,15 @@ class BackgroundUploadService {
           await Future.delayed(Duration(seconds: 2 * (retry + 1)));
         }
       } on SocketException {
-        await Future.delayed(Duration(seconds: 2 * (retry + 1)));
+        AppLogger.w('fetchPresignedUrl: SocketException on attempt ${retry + 1}');
+        if (retry < maxRetries - 1) {
+          await Future.delayed(Duration(seconds: 2 * (retry + 1)));
+        }
       } on http.ClientException {
-        await Future.delayed(Duration(seconds: 2 * (retry + 1)));
+        AppLogger.w('fetchPresignedUrl: ClientException on attempt ${retry + 1}');
+        if (retry < maxRetries - 1) {
+          await Future.delayed(Duration(seconds: 2 * (retry + 1)));
+        }
       }
     }
     AppLogger.e('fetchPresignedUrl: failed after $maxRetries retries');
