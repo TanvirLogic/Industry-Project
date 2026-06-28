@@ -38,8 +38,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
   int get completedCount =>
       _queue.where((item) => item.status == 'completed').length;
 
-  int get failedCount =>
-      _queue.where((item) => item.status == 'failed').length;
+  int get failedCount => _queue.where((item) => item.status == 'failed').length;
 
   double get totalProgress {
     if (_activeItem == null) return 0.0;
@@ -102,11 +101,11 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         final lastUpdatedParsed = DateTime.tryParse(item.lastUpdated);
         if (item.status == 'uploading' &&
             lastUpdatedParsed != null &&
-            now.difference(lastUpdatedParsed) >
-                const Duration(minutes: 10)) {
+            now.difference(lastUpdatedParsed) > const Duration(minutes: 10)) {
           AppLogger.w(
-              '_queuePump: resetting stale uploading item id=${item.id} '
-              '(lastUpdated=${item.lastUpdated})');
+            '_queuePump: resetting stale uploading item id=${item.id} '
+            '(lastUpdated=${item.lastUpdated})',
+          );
           await UploadQueueRepository.resetStaleUploading();
           recoveredAny = true;
           break;
@@ -127,7 +126,8 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         final hasUploading = all.any((i) => i.status == 'uploading');
         if (!hasUploading) {
           AppLogger.w(
-              '_queuePump: lock stuck for >5m with no uploading item, releasing');
+            '_queuePump: lock stuck for >5m with no uploading item, releasing',
+          );
           _isUploading = false;
           _isUploadingSince = null;
         } else {
@@ -138,9 +138,11 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       if (_isUploading) return;
 
       // --- 3. Kick pending items ---
-      final hasPending = all.any((i) =>
-          i.status == 'pending' &&
-          (i.workerId == null || i.workerId!.isEmpty));
+      final hasPending = all.any(
+        (i) =>
+            i.status == 'pending' &&
+            (i.workerId == null || i.workerId!.isEmpty),
+      );
       if (hasPending) {
         AppLogger.i('_queuePump: found stuck pending items, kicking queue');
         _processNextItem();
@@ -156,7 +158,9 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         // fired (e.g. app killed during callback, or start() didn't re-fire
         // the completion callback). Retry the callback now.
         if (item.status == 'uploading' && item.isNativeCompleted) {
-          AppLogger.i('_loadQueue: retrying callback for completed-native item id=${item.id}');
+          AppLogger.i(
+            '_loadQueue: retrying callback for completed-native item id=${item.id}',
+          );
           unawaited(_handleNativeComplete(item.id!, item.workerId ?? ''));
           continue;
         }
@@ -165,7 +169,9 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         if (item.status == 'uploading' &&
             (item.workerId == null || item.workerId!.isEmpty)) {
           await UploadQueueRepository.updateStatus(
-              id: item.id!, status: 'pending');
+            id: item.id!,
+            status: 'pending',
+          );
         }
         // Remove items that never had any upload attempt (bytesUploaded == 0)
         // and are too old to be relevant — they can never be enqueued without
@@ -174,11 +180,11 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         if (item.status == 'pending' &&
             item.bytesUploaded == 0 &&
             (item.uploadUrl == null || item.uploadUrl!.isEmpty)) {
-          final age = DateTime.now()
-              .difference(DateTime.parse(item.createdAt));
+          final age = DateTime.now().difference(DateTime.parse(item.createdAt));
           if (age.inMinutes >= 30) {
             AppLogger.i(
-                '_loadQueue: removing stale pending item id=${item.id} (no uploadUrl, age=${age.inMinutes}min)');
+              '_loadQueue: removing stale pending item id=${item.id} (no uploadUrl, age=${age.inMinutes}min)',
+            );
             await UploadQueueRepository.deleteItem(item.id!);
           }
         }
@@ -186,9 +192,16 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
 
       _queue = await UploadQueueRepository.getActive();
       if (_queue.isNotEmpty) {
-        _activeItem = _queue.first;
-        _activeProgress = _queue.first.bytesUploaded > 0
-            ? ((_queue.first.bytesUploaded / _queue.first.fileSize) * 100).round()
+        final uploadingItems = _queue.where(
+          (item) => item.status == 'uploading',
+        );
+        final uploadingItem = uploadingItems.isNotEmpty
+            ? uploadingItems.first
+            : null;
+        _activeItem = uploadingItem ?? _queue.first;
+        _activeProgress = _activeItem!.fileSize > 0
+            ? ((_activeItem!.bytesUploaded / _activeItem!.fileSize) * 100)
+                  .round()
             : 0;
       }
       notifyListeners();
@@ -204,20 +217,35 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
   String _inferContentType(String filePath) {
     final ext = filePath.split('.').last.toLowerCase();
     switch (ext) {
-      case 'mp4': return 'video/mp4';
-      case 'mov': return 'video/quicktime';
-      case 'mkv': return 'video/x-matroska';
-      case 'webm': return 'video/webm';
-      case 'jpg': case 'jpeg': return 'image/jpeg';
-      case 'png': return 'image/png';
-      case 'pdf': return 'application/pdf';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls': return 'application/vnd.ms-excel';
-      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'ppt': return 'application/vnd.ms-powerpoint';
-      case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-      default: return 'application/octet-stream';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mov':
+        return 'video/quicktime';
+      case 'mkv':
+        return 'video/x-matroska';
+      case 'webm':
+        return 'video/webm';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'ppt':
+        return 'application/vnd.ms-powerpoint';
+      case 'pptx':
+        return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      default:
+        return 'application/octet-stream';
     }
   }
 
@@ -228,8 +256,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
   String _resolveContentType(UploadQueueItem item) {
     if (item.uploadType == 'resource' && item.metadata != null) {
       try {
-        final meta = ModuleLessonMetadata.fromJson(
-            jsonDecode(item.metadata!));
+        final meta = ModuleLessonMetadata.fromJson(jsonDecode(item.metadata!));
         if (meta.contentType != null && meta.contentType!.isNotEmpty) {
           return meta.contentType!;
         }
@@ -239,9 +266,11 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
   }
 
   bool _hasInFlightFile(List<UploadQueueItem> items, String filePath) {
-    return items.any((item) =>
-        item.filePath == filePath &&
-        (item.status == 'pending' || item.status == 'uploading'));
+    return items.any(
+      (item) =>
+          item.filePath == filePath &&
+          (item.status == 'pending' || item.status == 'uploading'),
+    );
   }
 
   /// Find and enqueue the next pending item that isn't already tracked
@@ -259,11 +288,15 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       final allActive = await UploadQueueRepository.getActive();
 
       // Find a pending item that actually needs enqueueing
-      candidate = allActive.where((i) =>
-          i.status == 'pending' &&
-          (i.workerId == null || i.workerId!.isEmpty) &&
-          i.uploadUrl != null &&
-          i.uploadUrl!.isNotEmpty).firstOrNull;
+      candidate = allActive
+          .where(
+            (i) =>
+                i.status == 'pending' &&
+                (i.workerId == null || i.workerId!.isEmpty) &&
+                i.uploadUrl != null &&
+                i.uploadUrl!.isNotEmpty,
+          )
+          .firstOrNull;
 
       if (candidate == null || candidate.id == null) {
         AppLogger.i('_processNextItem: no item to enqueue');
@@ -279,9 +312,13 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       if (_isUrlStale(candidate)) {
         final freshUrls = await _fetchFreshUrls(candidate);
         if (freshUrls == null) {
-          AppLogger.e('_processNextItem: URL refresh failed for id=${candidate.id}');
+          AppLogger.e(
+            '_processNextItem: URL refresh failed for id=${candidate.id}',
+          );
           await UploadQueueRepository.markFailed(
-              candidate.id!, 'Upload URL expired and could not be refreshed');
+            candidate.id!,
+            'Upload URL expired and could not be refreshed',
+          );
           await _onItemTerminal(candidate.id!);
           return;
         }
@@ -303,7 +340,10 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       _activeProgress = 0;
       // Keep the Dart isolate alive for reliable callback delivery
       await UploadNotificationService.startService();
-      await UploadQueueRepository.updateStatus(id: candidate.id!, status: 'uploading');
+      await UploadQueueRepository.updateStatus(
+        id: candidate.id!,
+        status: 'uploading',
+      );
       notifyListeners();
 
       final taskId = await BackgroundUploaderService.enqueueUpload(
@@ -315,16 +355,22 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       );
 
       if (taskId == null) {
-        AppLogger.e('_processNextItem: enqueueUpload returned null for id=${candidate.id}');
+        AppLogger.e(
+          '_processNextItem: enqueueUpload returned null for id=${candidate.id}',
+        );
         await UploadQueueRepository.markFailed(
-            candidate.id!, 'Failed to start native upload');
+          candidate.id!,
+          'Failed to start native upload',
+        );
         await _onItemTerminal(candidate.id!);
         return;
       }
       AppLogger.i('_processNextItem: enqueued successfully, taskId=$taskId');
 
       await UploadQueueRepository.updateWorkerId(
-          id: candidate.id!, workerId: taskId);
+        id: candidate.id!,
+        workerId: taskId,
+      );
     } catch (e) {
       AppLogger.e('_processNextItem: exception: $e');
       _isUploading = false;
@@ -335,7 +381,9 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       }
       if (candidate != null && candidate.id != null) {
         await UploadQueueRepository.markFailed(
-            candidate.id!, 'Enqueue error: $e');
+          candidate.id!,
+          'Enqueue error: $e',
+        );
         await _onItemTerminal(candidate.id!);
       }
       return;
@@ -365,20 +413,23 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         endpoint = Urls.courseAssetsUploadUrl;
         buildPayload = (name) => {
           'thumbnailFilename': name,
-          'thumbnailContentType':
-              BackgroundUploadService.inferImageContentType(name),
+          'thumbnailContentType': BackgroundUploadService.inferImageContentType(
+            name,
+          ),
         };
         break;
       case 'module_lesson':
         endpoint = Urls.courseModuleUploadUrl;
         buildPayload = (name) => {
           'videoFilename': name,
-          'videoContentType':
-              BackgroundUploadService.inferVideoContentType(name),
+          'videoContentType': BackgroundUploadService.inferVideoContentType(
+            name,
+          ),
         };
         if (item.metadata != null) {
-          final meta =
-              ModuleLessonMetadata.fromJson(jsonDecode(item.metadata!));
+          final meta = ModuleLessonMetadata.fromJson(
+            jsonDecode(item.metadata!),
+          );
           extraFields = {'moduleID': meta.moduleId};
         }
         break;
@@ -387,7 +438,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         buildPayload = (name) {
           final ct = item.metadata != null
               ? (jsonDecode(item.metadata!) as Map)['contentType'] ??
-                  'application/octet-stream'
+                    'application/octet-stream'
               : 'application/octet-stream';
           return {'filename': name, 'contentType': ct};
         };
@@ -398,8 +449,9 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
           'thumbnailFilename': 'keep.jpg',
           'thumbnailContentType': 'image/jpeg',
           'videoFilename': name,
-          'videoContentType':
-              BackgroundUploadService.inferVideoContentType(name),
+          'videoContentType': BackgroundUploadService.inferVideoContentType(
+            name,
+          ),
         };
         break;
       default:
@@ -407,8 +459,9 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
         endpoint = Urls.videoPostAssetsUploadUrl;
         buildPayload = (name) => {
           'videoFilename': name,
-          'videoContentType':
-              BackgroundUploadService.inferVideoContentType(name),
+          'videoContentType': BackgroundUploadService.inferVideoContentType(
+            name,
+          ),
         };
     }
 
@@ -427,7 +480,9 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
 
   Future<void> _onNativeTaskStatus(TaskStatusUpdate update) async {
     final itemId = _extractItemId(update.task);
-    AppLogger.i('_onNativeTaskStatus: item=$itemId status=${update.status} taskId=${update.task.taskId}');
+    AppLogger.i(
+      '_onNativeTaskStatus: item=$itemId status=${update.status} taskId=${update.task.taskId}',
+    );
     if (itemId == null) return;
 
     // Skip if item already reached a terminal state (e.g. cancelled then a
@@ -436,23 +491,28 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     final item = allItems.where((i) => i.id == itemId).firstOrNull;
     if (item == null) return;
     if (item.status == 'completed' || item.status == 'cancelled') {
-      AppLogger.i('_onNativeTaskStatus: item=$itemId already ${item.status}, skipping');
+      AppLogger.i(
+        '_onNativeTaskStatus: item=$itemId already ${item.status}, skipping',
+      );
       return;
     }
 
     switch (update.status) {
       case TaskStatus.complete:
         await _handleNativeComplete(itemId, update.task.taskId);
+        break;
       case TaskStatus.failed:
-        await UploadQueueRepository.markFailed(
-            itemId, 'Native upload failed');
+        await UploadQueueRepository.markFailed(itemId, 'Native upload failed');
         await _onItemTerminal(itemId);
+        break;
       case TaskStatus.canceled:
         await UploadQueueRepository.updateStatus(
-            id: itemId, status: 'cancelled');
-        await UploadQueueRepository.updateWorkerId(
-            id: itemId, workerId: '');
+          id: itemId,
+          status: 'cancelled',
+        );
+        await UploadQueueRepository.updateWorkerId(id: itemId, workerId: '');
         await _onItemTerminal(itemId);
+        break;
       default:
         break;
     }
@@ -496,14 +556,16 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
           final queueIdx = _queue.indexWhere((i) => i.id == itemId);
           if (queueIdx >= 0) {
             final total = _queue.length;
-            unawaited(UploadNotificationService.showQueueProgress(
-              queueIndex: queueIdx + 1,
-              queueTotal: total,
-              itemProgress: bytes,
-              itemTotal: item.fileSize,
-              itemTitle: item.title,
-              uploadType: item.uploadType,
-            ));
+            unawaited(
+              UploadNotificationService.showQueueProgress(
+                queueIndex: queueIdx + 1,
+                queueTotal: total,
+                itemProgress: bytes,
+                itemTotal: item.fileSize,
+                itemTitle: item.title,
+                uploadType: item.uploadType,
+              ),
+            );
           }
         }
       }
@@ -638,10 +700,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       case 'course_intro':
         return _CallbackDetails(
           url: Urls.courseAssetsUploadUrl,
-          body: {
-            'title': item.title,
-            'videoUrl': item.fileUrl,
-          },
+          body: {'title': item.title, 'videoUrl': item.fileUrl},
         );
 
       default:
@@ -1108,10 +1167,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     final urls = await BackgroundUploadService.fetchPresignedUrl(
       filePath: filePath,
       endpoint: Urls.courseModuleResourceUploadUrl,
-      buildPayload: (name) => {
-        'filename': name,
-        'contentType': contentType,
-      },
+      buildPayload: (name) => {'filename': name, 'contentType': contentType},
     );
 
     if (urls == null) {
@@ -1142,8 +1198,13 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> _fetchAndStart(File file, String title, int duration,
-      int fileSize, int id) async {
+  Future<bool> _fetchAndStart(
+    File file,
+    String title,
+    int duration,
+    int fileSize,
+    int id,
+  ) async {
     final urls = await BackgroundUploadService.fetchPresignedUrl(
       filePath: file.path,
       endpoint: Urls.videoPostAssetsUploadUrl,
@@ -1175,9 +1236,11 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
   // ──────────────────────────────────────────────
 
   Future<bool> _ensureNotificationPermission() async {
-    if (await UploadNotificationService.hasNotificationPermission()) return true;
+    if (await UploadNotificationService.hasNotificationPermission())
+      return true;
 
-    final first = await UploadNotificationService.requestNotificationPermission();
+    final first =
+        await UploadNotificationService.requestNotificationPermission();
     if (first) return true;
 
     final shouldRetry = await _showPermissionDialog(
@@ -1189,7 +1252,8 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     );
     if (shouldRetry != true) return false;
 
-    final second = await UploadNotificationService.requestNotificationPermission();
+    final second =
+        await UploadNotificationService.requestNotificationPermission();
     if (second) return true;
 
     final openSettings = await _showPermissionDialog(
@@ -1262,8 +1326,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     if (item?.workerId != null && item!.workerId!.isNotEmpty) {
       await BackgroundUploaderService.cancelUploadByWorkerId(item.workerId!);
     }
-    await UploadQueueRepository.updateStatus(
-        id: queueId, status: 'cancelled');
+    await UploadQueueRepository.updateStatus(id: queueId, status: 'cancelled');
     _queue.removeWhere((item) => item.id == queueId);
     if (_activeItem?.id == queueId) {
       _activeItem = null;
@@ -1311,8 +1374,8 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     _queue = await UploadQueueRepository.getActive();
     final item = _queue.firstWhere(
       (i) => i.id == queueId,
-      orElse: () => UploadQueueItem(
-          filePath: '', title: '', status: '', uploadType: ''),
+      orElse: () =>
+          UploadQueueItem(filePath: '', title: '', status: '', uploadType: ''),
     );
     if (item.filePath.isEmpty) {
       AppLogger.w('retryFailed: queueId=$queueId not found in active queue');
@@ -1351,10 +1414,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     UploadQueueRepository.markCompleted(id);
     final idx = _queue.indexWhere((item) => item.id == id);
     if (idx >= 0) {
-      _queue[idx] = _queue[idx].copyWith(
-        status: 'completed',
-        fileUrl: fileUrl,
-      );
+      _queue[idx] = _queue[idx].copyWith(status: 'completed', fileUrl: fileUrl);
       _cleanupCachedFile(_queue[idx].filePath);
     }
     if (_activeItem?.id == id) {
@@ -1377,10 +1437,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     UploadQueueRepository.markFailed(id, error);
     final idx = _queue.indexWhere((item) => item.id == id);
     if (idx >= 0) {
-      _queue[idx] = _queue[idx].copyWith(
-        status: 'failed',
-        errorMessage: error,
-      );
+      _queue[idx] = _queue[idx].copyWith(status: 'failed', errorMessage: error);
     }
     if (_activeItem?.id == id) {
       _isUploading = false;

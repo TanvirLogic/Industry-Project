@@ -6,7 +6,6 @@ import 'package:edtech/global/core/services/logger_service.dart';
 import 'package:http/http.dart' as http;
 
 class BackgroundUploaderService {
-
   /// Upload file to S3 via presigned PUT using background_downloader.
   /// Uses UploadTask.fromFile with `post: 'binary'` for raw binary upload
   /// and `httpRequestMethod: 'PUT'` for S3 presigned URL compatibility.
@@ -36,15 +35,9 @@ class BackgroundUploaderService {
       updates: Updates.statusAndProgress,
     );
 
-    // Configure system notification with progress bar for this upload
-    FileDownloader().configureNotificationForTask(
-      task,
-      running: TaskNotification('Uploading', '{displayName}  {progress}'),
-      complete: TaskNotification('Upload complete', '{displayName}'),
-      error: TaskNotification('Upload failed', '{displayName}'),
-      progressBar: true,
-    );
-
+    // Background_downloader already runs in foreground mode, and upload
+    // progress is surfaced through the shared notification service.
+    // Avoid configuring duplicate task-level notifications here.
     AppLogger.i('enqueueUpload: calling enqueue for taskId=${task.taskId}');
     final ok = await FileDownloader().enqueue(task);
     if (!ok) {
@@ -69,11 +62,13 @@ class BackgroundUploaderService {
       if (idempotencyKey != null) {
         headers['Idempotency-Key'] = idempotencyKey;
       }
-      final response = await http.post(
-        Uri.parse(callbackUrl),
-        headers: headers,
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse(callbackUrl),
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
       return response.statusCode == 200 ||
           response.statusCode == 201 ||
           response.statusCode == 409;

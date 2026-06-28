@@ -221,7 +221,9 @@ class ManageModuleProvider extends ChangeNotifier {
         AppLogger.i('_restorePendingUploads: no active lesson items found');
         return;
       }
-      AppLogger.i('_restorePendingUploads: found ${lessonItems.length} item(s) to restore');
+      AppLogger.i(
+        '_restorePendingUploads: found ${lessonItems.length} item(s) to restore',
+      );
 
       bool hasUpdates = false;
 
@@ -277,9 +279,9 @@ class ManageModuleProvider extends ChangeNotifier {
             : 0.0;
         if (item.workerId != null && item.workerId!.isNotEmpty) {
           try {
-            final record = await FileDownloader()
-                .database
-                .recordForId(item.workerId!);
+            final record = await FileDownloader().database.recordForId(
+              item.workerId!,
+            );
             if (record != null && record.progress > restoredProgress) {
               restoredProgress = record.progress;
               // Sync to our SQLite
@@ -561,11 +563,21 @@ class ManageModuleProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> deletePendingLesson(int queueId) async {
+  Future<void> deletePendingLesson(
+    int queueId, {
+    UnifiedUploadQueueProvider? queueProvider,
+  }) async {
     final pending = _pendingLessons[queueId];
     if (pending == null) return;
 
-    await UploadQueueRepository.updateStatus(id: queueId, status: 'cancelled');
+    if (queueProvider != null) {
+      await queueProvider.cancelTask(queueId);
+    } else {
+      await UploadQueueRepository.updateStatus(
+        id: queueId,
+        status: 'cancelled',
+      );
+    }
 
     _pendingLessons.remove(queueId);
 
@@ -674,7 +686,7 @@ class ManageModuleProvider extends ChangeNotifier {
 
   void _startProgressPolling() {
     _progressTimer?.cancel();
-    _pollProgress();  // Run immediately for instant UI update
+    _pollProgress(); // Run immediately for instant UI update
     _progressTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollProgress();
     });
@@ -693,43 +705,47 @@ class ManageModuleProvider extends ChangeNotifier {
         final dbItem = dbMap[queueId];
 
         if (dbItem == null) {
-          AppLogger.w('_pollProgress: queueId=$queueId vanished from DB — removing from pending');
+          AppLogger.w(
+            '_pollProgress: queueId=$queueId vanished from DB — removing from pending',
+          );
           _pendingLessons.remove(queueId);
           updated = true;
           continue;
         }
 
-          final status = dbItem.status;
-          var progress = dbItem.fileSize > 0
-              ? (dbItem.bytesUploaded / dbItem.fileSize)
-              : 0.0;
+        final status = dbItem.status;
+        var progress = dbItem.fileSize > 0
+            ? (dbItem.bytesUploaded / dbItem.fileSize)
+            : 0.0;
 
-          // If the item has a workerId, try background_downloader's DB for
-          // real progress — this works even if Dart callbacks aren't firing.
-          if (dbItem.workerId != null && dbItem.workerId!.isNotEmpty) {
-            try {
-              final record = await FileDownloader()
-                  .database
-                  .recordForId(dbItem.workerId!);
-              if (record != null && record.progress > progress) {
-                progress = record.progress;
-                if (dbItem.fileSize > 0) {
-                  await UploadQueueRepository.updateProgress(
-                    id: queueId,
-                    bytesUploaded: (record.progress * dbItem.fileSize).round(),
-                  );
-                }
+        // If the item has a workerId, try background_downloader's DB for
+        // real progress — this works even if Dart callbacks aren't firing.
+        if (dbItem.workerId != null && dbItem.workerId!.isNotEmpty) {
+          try {
+            final record = await FileDownloader().database.recordForId(
+              dbItem.workerId!,
+            );
+            if (record != null && record.progress > progress) {
+              progress = record.progress;
+              if (dbItem.fileSize > 0) {
+                await UploadQueueRepository.updateProgress(
+                  id: queueId,
+                  bytesUploaded: (record.progress * dbItem.fileSize).round(),
+                );
               }
-            } catch (_) {}
-          }
+            }
+          } catch (_) {}
+        }
 
-          if (pending.uploadStatus != status ||
-              pending.uploadProgress != progress) {
-            AppLogger.i('_pollProgress: queueId=$queueId status=$status progress=${progress.toStringAsFixed(2)}');
-            pending.uploadStatus = status;
-            pending.uploadProgress = progress;
-            updated = true;
-          }
+        if (pending.uploadStatus != status ||
+            pending.uploadProgress != progress) {
+          AppLogger.i(
+            '_pollProgress: queueId=$queueId status=$status progress=${progress.toStringAsFixed(2)}',
+          );
+          pending.uploadStatus = status;
+          pending.uploadProgress = progress;
+          updated = true;
+        }
 
         if (dbItem.fileUrl != null && dbItem.fileUrl!.isNotEmpty) {
           pending.fileUrl = dbItem.fileUrl;

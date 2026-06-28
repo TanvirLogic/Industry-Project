@@ -205,8 +205,12 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
                                   onShowRenameDialog: _showRenameDialog,
                                   pendingLessonsForModule:
                                       provider.pendingLessonsForModule,
-                                  onDeletePendingLesson:
-                                      provider.deletePendingLesson,
+                                  onDeletePendingLesson: (queueId) =>
+                                      provider.deletePendingLesson(
+                                        queueId,
+                                        queueProvider: context
+                                            .read<UnifiedUploadQueueProvider>(),
+                                      ),
                                   onAddVideo: (index) =>
                                       ManageModuleAddLessonSheet.show(
                                         context,

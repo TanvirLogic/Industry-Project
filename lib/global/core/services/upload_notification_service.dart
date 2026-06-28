@@ -129,11 +129,7 @@ class UploadNotificationService {
           IOSFlutterLocalNotificationsPlugin
         >();
     if (iosPlugin != null) {
-      await iosPlugin.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+      await iosPlugin.requestPermissions(alert: true, badge: true, sound: true);
     }
   }
 
@@ -176,7 +172,8 @@ class UploadNotificationService {
   }) async {
     final pct = itemTotal > 0 ? (itemProgress * 100 ~/ itemTotal) : 0;
     final label = _typeLabel(uploadType);
-    final title = 'Uploading $queueIndex/$queueTotal • ${_truncate(itemTitle, 30)}';
+    final title =
+        'Uploading $queueIndex/$queueTotal • ${_truncate(itemTitle, 30)}';
     final body = label == 'Video'
         ? 'Uploading... $pct%'
         : '$label uploading... $pct%';
@@ -236,17 +233,6 @@ class UploadNotificationService {
         iOS: const DarwinNotificationDetails(),
       ),
     );
-
-    if (queueIndex != null && queueTotal != null) {
-      await showQueueProgress(
-        queueIndex: queueIndex,
-        queueTotal: queueTotal,
-        itemProgress: progress,
-        itemTotal: total,
-        itemTitle: title,
-        uploadType: uploadType,
-      );
-    }
   }
 
   static Future<void> showQueueItemComplete({
