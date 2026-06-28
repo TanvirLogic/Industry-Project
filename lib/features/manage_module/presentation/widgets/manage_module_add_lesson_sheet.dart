@@ -12,7 +12,6 @@ class ManageModuleAddLessonSheet extends StatefulWidget {
   final Future<bool> Function(
     String title,
     XFile file,
-    void Function(double) onProgress,
   ) onAddLesson;
 
   const ManageModuleAddLessonSheet({
@@ -31,7 +30,6 @@ class ManageModuleAddLessonSheet extends StatefulWidget {
     required Future<bool> Function(
       String title,
       XFile file,
-      void Function(double) onProgress,
     ) onAddLesson,
   }) {
     return showModalBottomSheet(
@@ -103,7 +101,6 @@ class _ManageModuleAddLessonSheetState
     final success = await widget.onAddLesson(
       title,
       _selectedFile!,
-      (_) {},
     );
 
     if (!mounted) return;

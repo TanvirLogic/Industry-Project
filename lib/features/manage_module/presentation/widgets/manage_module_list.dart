@@ -16,7 +16,7 @@ class ManageModuleList extends StatelessWidget {
   final void Function(CourseModule module) onEditModule;
   final void Function(CourseModule module) onToggleExpand;
   final void Function(CourseModule module, String newName) onRename;
-  final void Function(String currentName, ValueChanged<String> onSaved)
+  final Future<void> Function(String currentName, ValueChanged<String> onSaved)
   onShowRenameDialog;
   final void Function(int index) onAddVideo;
   final void Function(int index) onAddResource;

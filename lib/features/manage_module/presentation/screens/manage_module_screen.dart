@@ -18,6 +18,7 @@ import 'package:edtech/features/manage_module/presentation/widgets/manage_module
 import 'package:edtech/global/core/widgets/app_alert_dialog.dart';
 import 'package:edtech/global/core/providers/video_player_provider.dart';
 import 'package:edtech/features/profile/student/presentation/widgets/video_player_screen.dart';
+import 'package:edtech/global/core/services/logger_service.dart';
 import 'package:edtech/global/core/services/toast_service.dart';
 
 class ManageModuleScreen extends StatelessWidget {
@@ -55,17 +56,19 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
     super.dispose();
   }
 
-  void _showRenameDialog(String currentName, ValueChanged<String> onSaved) {
-    AppAlertDialog.showInput(
+  Future<void> _showRenameDialog(
+    String currentName,
+    ValueChanged<String> onSaved,
+  ) async {
+    final value = await AppAlertDialog.showInput(
       context: context,
       title: 'Rename',
       initialValue: currentName,
       hintText: 'Enter new name',
-    ).then((value) {
-      if (value != null && value.isNotEmpty) {
-        onSaved(value);
-      }
-    });
+    );
+    if (value != null && value.isNotEmpty) {
+      onSaved(value);
+    }
   }
 
   @override
@@ -81,6 +84,7 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
         return PopScope(
           canPop: true,
           onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
             context.read<VideoPlayerProvider>().dismiss();
           },
           child: Scaffold(
@@ -217,7 +221,7 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
                                         lessonType: LessonType.video,
                                         moduleId: provider.modules[index].id,
                                         courseId: provider.courseId,
-                                        onAddLesson: (title, file, _) =>
+                                        onAddLesson: (title, file) =>
                                             provider.addVideoLesson(
                                               index,
                                               title,
@@ -234,7 +238,7 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
                                         lessonType: LessonType.resource,
                                         moduleId: provider.modules[index].id,
                                         courseId: provider.courseId,
-                                        onAddLesson: (title, file, _) =>
+                                        onAddLesson: (title, file) =>
                                             provider.addResourceLesson(
                                               index,
                                               title,
@@ -277,7 +281,10 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
                                           ),
                                         ),
                                       );
-                                    } catch (_) {
+                                    } catch (e) {
+                                      AppLogger.e(
+                                        'onTapVideo navigation error: $e',
+                                      );
                                       ToastService.showError(
                                         'Could not open video player',
                                       );
@@ -295,7 +302,10 @@ class _ManageModuleBodyState extends State<_ManageModuleBody> {
                                         Uri.parse(fileUrl),
                                         mode: LaunchMode.externalApplication,
                                       );
-                                    } catch (_) {
+                                    } catch (e) {
+                                      AppLogger.e(
+                                        'onTapResource launchUrl error: $e',
+                                      );
                                       ToastService.showError(
                                         'Could not open resource',
                                       );

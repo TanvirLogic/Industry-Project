@@ -785,11 +785,8 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       final items = await UploadQueueRepository.getAll();
       final item = items.where((i) => i.id == itemId).firstOrNull;
       if (item != null && item.fileSize > 0) {
-        final currentStoredPct = item.fileSize > 0
-            ? ((item.bytesUploaded / item.fileSize) * 100).round()
-            : 0;
-        if (pct != currentStoredPct) {
-          final bytes = (update.progress * item.fileSize).round();
+        final bytes = (update.progress * item.fileSize).round();
+        if (bytes > item.bytesUploaded) {
           await UploadQueueRepository.updateProgress(
             id: itemId,
             bytesUploaded: bytes,
@@ -970,7 +967,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     _queue = await UploadQueueRepository.getActive();
     notifyListeners();
     if (_queue.isEmpty) {
-      // Native notification handles completion display
+      await UploadNotificationService.stopService();
     }
     _processNextItem();
   }
@@ -1010,12 +1007,27 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       _queue = await UploadQueueRepository.getActive();
       notifyListeners();
 
-      final ok = await _fetchAndStart(file, title, duration, fileSize, id);
-      if (ok) {
-        ToastService.showSuccess('Video queued for upload');
-        return true;
+      final urls = await BackgroundUploadService.fetchPresignedUrl(
+        filePath: file.path,
+        endpoint: Urls.videoPostAssetsUploadUrl,
+        buildPayload: (name) => {
+          'videoFilename': name,
+          'videoContentType': BackgroundUploadService.inferVideoContentType(name),
+        },
+      );
+      if (urls == null) {
+        await _cleanupFailedUpload(id, file.path);
+        ToastService.showError('Failed to get upload URL');
+        return false;
       }
-      return false;
+      await UploadQueueRepository.updateUrls(
+        id: id,
+        uploadUrl: urls['uploadUrl']!,
+        fileUrl: urls['fileUrl']!,
+      );
+      _processNextItem();
+      ToastService.showSuccess('Video queued for upload');
+      return true;
     } catch (e) {
       AppLogger.e('addToQueue error - $e');
       ToastService.showError('Failed to queue video. Please try again.');
@@ -1434,38 +1446,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> _fetchAndStart(
-    File file,
-    String title,
-    int duration,
-    int fileSize,
-    int id,
-  ) async {
-    final urls = await BackgroundUploadService.fetchPresignedUrl(
-      filePath: file.path,
-      endpoint: Urls.videoPostAssetsUploadUrl,
-      buildPayload: (name) => {
-        'videoFilename': name,
-        'videoContentType': BackgroundUploadService.inferVideoContentType(name),
-      },
-    );
 
-    if (urls == null) {
-      await _cleanupFailedUpload(id, file.path);
-      AppLogger.w('_fetchAndStart: presigned URL fetch returned null');
-      ToastService.showError('Failed to get upload URL');
-      return false;
-    }
-
-    await UploadQueueRepository.updateUrls(
-      id: id,
-      uploadUrl: urls['uploadUrl']!,
-      fileUrl: urls['fileUrl']!,
-    );
-
-    _processNextItem();
-    return true;
-  }
 
   // ──────────────────────────────────────────────
   //  Permission helpers
@@ -1506,14 +1487,24 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
   }
 
   Future<void> _openNotificationSettings() async {
-    // Fallback: open app settings
-    await Process.run('am', [
-      'start',
-      '-a',
-      'android.settings.APPLICATION_DETAILS_SETTINGS',
-      '-d',
-      'package:${Platform.resolvedExecutable}',
-    ]);
+    final exec = Platform.resolvedExecutable;
+    final segments = exec.split('/');
+    String? packageName;
+    for (final segment in segments.reversed) {
+      if (segment.contains('.') && !segment.startsWith('~~')) {
+        packageName = segment.split('-').first;
+        break;
+      }
+    }
+    if (packageName != null && packageName.isNotEmpty) {
+      await Process.run('am', [
+        'start',
+        '-a',
+        'android.settings.APPLICATION_DETAILS_SETTINGS',
+        '-d',
+        'package:$packageName',
+      ]);
+    }
   }
 
   Future<bool?> _showPermissionDialog({
@@ -1607,6 +1598,7 @@ class UnifiedUploadQueueProvider extends ChangeNotifier {
       status: 'pending',
       errorMessage: null,
     );
+    await UploadQueueRepository.updateWorkerId(id: queueId, workerId: '');
 
     // Refresh queue from DB so the item is guaranteed to be in _queue
     _queue = await UploadQueueRepository.getActive();

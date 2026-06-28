@@ -14,7 +14,7 @@ class ModuleCard extends StatelessWidget {
   final bool revealed;
   final VoidCallback onToggleExpand;
   final ValueChanged<String> onRename;
-  final void Function(String, ValueChanged<String>) onShowRenameDialog;
+  final Future<void> Function(String, ValueChanged<String>) onShowRenameDialog;
   final VoidCallback onAddVideo;
   final VoidCallback onAddResource;
   final void Function(int, int) onReorderLesson;
@@ -384,7 +384,7 @@ class _LessonSwipeRow extends StatefulWidget {
   final ValueNotifier<int>? resetNotifier;
   final Future<bool> Function(int) onDeleteLesson;
   final void Function(int, String) onRenameLesson;
-  final void Function(String, ValueChanged<String>) onShowRenameDialog;
+  final Future<void> Function(String, ValueChanged<String>) onShowRenameDialog;
   final void Function(int) onEditLesson;
   final void Function(String videoUrl, String title) onTapVideo;
   final void Function(String fileUrl, String title) onTapResource;

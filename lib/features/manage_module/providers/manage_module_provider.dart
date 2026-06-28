@@ -727,7 +727,7 @@ class ManageModuleProvider extends ChangeNotifier {
 
   Future<void> _pollProgress() async {
     try {
-      final allDb = await UploadQueueRepository.getAll();
+      final allDb = await UploadQueueRepository.getActive();
       final dbMap = {for (final item in allDb) item.id: item};
       bool updated = false;
       final completedIds = <int>[];
@@ -839,8 +839,7 @@ class ManageModuleProvider extends ChangeNotifier {
     );
     final existing = existingItems.cast<UploadQueueItem?>().firstWhere(
       (item) =>
-          item!.filePath == filePath &&
-          (item.uploadType == 'module_lesson' || item.uploadType == 'resource'),
+          item!.uploadType == 'module_lesson' || item.uploadType == 'resource',
       orElse: () => null,
     );
     if (existing == null) return true;
