@@ -341,15 +341,31 @@ import UserNotifications
           config.timeoutIntervalForResource = 3600
           config.waitsForConnectivity = true
 
+          let tempFileURL: URL
+          do {
+            tempFileURL = try self.createPartUploadFile(
+              from: fileURL,
+              startByte: startByte,
+              length: partLength,
+              taskId: taskId,
+              partNumber: partNumber
+            )
+          } catch {
+            tracker.recordFailure(partNumber: partNumber, error: "Failed to prepare part payload: \(error.localizedDescription)")
+            continue
+          }
+
           var request = URLRequest(url: URL(string: uploadUrl)!)
           request.httpMethod = "PUT"
           request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
           request.setValue("\(partLength)", forHTTPHeaderField: "Content-Length")
+          request.setValue("bytes \(startByte)-\(endByte - 1)/\(Int64((try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int64) ?? 0))", forHTTPHeaderField: "Content-Range")
 
           let delegate = PartUploadDelegate(
             sessionId: sessionId,
             taskId: taskId,
             partNumber: partNumber,
+            tempFileURL: tempFileURL,
             onCompletion: { [weak self] resultDict in
               tracker.recordCompletion(partNumber: partNumber, result: resultDict)
             },
@@ -360,7 +376,7 @@ import UserNotifications
             }
           )
           let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
-          let uploadTask = session.uploadTask(with: request, fromFile: fileURL)
+          let uploadTask = session.uploadTask(with: request, fromFile: tempFileURL)
           uploadTask.taskDescription = "eduverse_part_\(taskId)_\(partNumber)"
           uploadTask.resume()
         }
@@ -491,7 +507,35 @@ import UserNotifications
     return caches.appendingPathComponent("eduverse_upload_\(taskId).json")
   }
 
-  // ── Multipart parts — foreground URLSession (parts 5-10MB, fast) ──
+  // ── Multipart parts — background URLSession with byte-range part payloads ──
+
+  private func createPartUploadFile(from sourceURL: URL, startByte: Int64, length: Int64, taskId: Int, partNumber: Int) throws -> URL {
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("eduverse_part_\(taskId)_\(partNumber)_\(UUID().uuidString).bin")
+    let fileManager = FileManager.default
+    if fileManager.fileExists(atPath: tempURL.path) {
+      try fileManager.removeItem(at: tempURL)
+    }
+    fileManager.createFile(atPath: tempURL.path, contents: nil)
+
+    let input = try FileHandle(forReadingFrom: sourceURL)
+    defer { try? input.close() }
+    try input.seek(toOffset: UInt64(startByte))
+
+    let output = try FileHandle(forWritingTo: tempURL)
+    defer { try? output.close() }
+
+    var remaining = length
+    let chunkSize = 64 * 1024
+    while remaining > 0 {
+      let bytesToRead = min(Int64(chunkSize), remaining)
+      let data = input.readData(ofLength: Int(bytesToRead))
+      if data.isEmpty { break }
+      try output.write(contentsOf: data)
+      remaining -= Int64(data.count)
+    }
+
+    return tempURL
+  }
 
   /// POST the complete-multipart endpoint via a background URLSession data task.
   /// Returns the fileUrl on success, or nil on failure.
@@ -684,6 +728,7 @@ private class PartUploadDelegate: NSObject, URLSessionDelegate, URLSessionTaskDe
   let sessionId: String
   let taskId: Int
   let partNumber: Int
+  let tempFileURL: URL?
   let onCompletion: ([String: Any]) -> Void
   let onBackgroundEventsFinished: (String) -> Void
 
@@ -691,12 +736,14 @@ private class PartUploadDelegate: NSObject, URLSessionDelegate, URLSessionTaskDe
     sessionId: String,
     taskId: Int,
     partNumber: Int,
+    tempFileURL: URL?,
     onCompletion: @escaping ([String: Any]) -> Void,
     onBackgroundEventsFinished: @escaping (String) -> Void
   ) {
     self.sessionId = sessionId
     self.taskId = taskId
     self.partNumber = partNumber
+    self.tempFileURL = tempFileURL
     self.onCompletion = onCompletion
     self.onBackgroundEventsFinished = onBackgroundEventsFinished
   }
@@ -720,6 +767,9 @@ private class PartUploadDelegate: NSObject, URLSessionDelegate, URLSessionTaskDe
       }
     }
 
+    if let tempFileURL {
+      try? FileManager.default.removeItem(at: tempFileURL)
+    }
     onCompletion(result)
   }
 

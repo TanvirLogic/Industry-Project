@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
@@ -21,6 +22,8 @@ class S3UploadService {
     required String contentType,
     Duration uploadTimeout = const Duration(seconds: 120),
     void Function(double progress)? onProgress,
+    String? completeUrlEndpoint,
+    String? s3Key,
   }) async {
     final fileSize = bytes.length;
 
@@ -64,11 +67,13 @@ class S3UploadService {
     if (isMultipart) {
       resolvedFileUrl = await _handleMultipartUpload(
         uploadUrlEndpoint: uploadUrlEndpoint,
+        completeUrlEndpoint: completeUrlEndpoint ?? uploadUrlEndpoint,
         wrapper: wrapper,
         bytes: bytes,
         contentType: contentType,
         uploadTimeout: uploadTimeout,
         onProgress: onProgress,
+        s3Key: s3Key,
       );
     } else {
       final uploadUrl = wrapper['uploadUrl'] as String?;
@@ -120,11 +125,13 @@ class S3UploadService {
 
   static Future<String?> _handleMultipartUpload({
     required String uploadUrlEndpoint,
+    required String completeUrlEndpoint,
     required Map wrapper,
     required List<int> bytes,
     required String contentType,
     required Duration uploadTimeout,
     void Function(double progress)? onProgress,
+    String? s3Key,
   }) async {
     final uploadId = wrapper['uploadId'] as String? ?? '';
     final parts = wrapper['parts'] as List? ?? [];
@@ -142,17 +149,9 @@ class S3UploadService {
       final uploadUrl = part['uploadUrl'] as String;
       final partSize = part['size'] as int?;
 
-      int start;
-      int end;
-      if (partSize != null) {
-        start = uploadedBytes;
-        end = (start + partSize).clamp(0, totalBytes);
-      } else {
-        start = i * (totalBytes ~/ totalParts);
-        end = (i == totalParts - 1)
-            ? totalBytes
-            : (i + 1) * (totalBytes ~/ totalParts);
-      }
+      final resolvedPartSize = partSize ?? (totalBytes / totalParts).ceil();
+      final start = (partNumber - 1) * resolvedPartSize;
+      final end = min(start + resolvedPartSize, totalBytes);
 
       final partBytes = bytes.sublist(start, end);
 
@@ -182,21 +181,49 @@ class S3UploadService {
     }
 
     final completeResponse = await getNetworkCaller().postRequest(
-      url: uploadUrlEndpoint,
-      body: {'uploadId': uploadId, 'parts': etags},
+      url: completeUrlEndpoint,
+      body: buildCompletePayload(
+        uploadId: uploadId,
+        etags: etags,
+        s3Key: s3Key,
+      ),
     );
 
     if (!completeResponse.isSuccess) return null;
 
-    final cr = completeResponse.responseData;
-    final cw = cr is Map ? cr['data'] : null;
-    final cd = cw is Map ? (cw['data'] ?? cw) : cw;
-    final fileUrl = cd is Map ? cd['fileUrl'] as String? : null;
+    final fileUrl = extractFileUrlFromCompleteResponse(
+      completeResponse.responseData,
+    );
 
     if (fileUrl == null) return null;
 
     onProgress?.call(1.0);
     return fileUrl;
+  }
+
+  static Map<String, dynamic> buildCompletePayload({
+    required String uploadId,
+    required List<Map<String, dynamic>> etags,
+    String? s3Key,
+  }) {
+    return {
+      'uploadId': uploadId,
+      'parts': etags,
+      if (s3Key != null && s3Key.isNotEmpty) 'key': s3Key,
+    };
+  }
+
+  static String? extractFileUrlFromCompleteResponse(dynamic responseData) {
+    if (responseData is! Map) return null;
+
+    final dataWrapper = responseData['data'];
+    if (dataWrapper is Map) {
+      final nested = dataWrapper['data'];
+      final candidate = nested is Map ? nested : dataWrapper;
+      return candidate['fileUrl'] as String?;
+    }
+
+    return responseData['fileUrl'] as String?;
   }
 
   static Future<void> _streamUpload({
